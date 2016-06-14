@@ -3,9 +3,10 @@ package turnpike
 import (
 	"crypto/tls"
 	"fmt"
-	"time"
-
 	"github.com/gorilla/websocket"
+	"net/http"
+	url_ "net/url"
+	"time"
 )
 
 type websocketPeer struct {
@@ -17,14 +18,14 @@ type websocketPeer struct {
 }
 
 // NewWebsocketPeer connects to the websocket server at the specified url.
-func NewWebsocketPeer(serialization Serialization, url, origin string, tlscfg *tls.Config) (Peer, error) {
+func NewWebsocketPeer(serialization Serialization, url, origin, proxyUrl string, tlscfg *tls.Config) (Peer, error) {
 	switch serialization {
 	case JSON:
-		return newWebsocketPeer(url, jsonWebsocketProtocol, origin,
+		return newWebsocketPeer(url, jsonWebsocketProtocol, origin, proxyUrl,
 			new(JSONSerializer), websocket.TextMessage, tlscfg,
 		)
 	case MSGPACK:
-		return newWebsocketPeer(url, msgpackWebsocketProtocol, origin,
+		return newWebsocketPeer(url, msgpackWebsocketProtocol, origin, proxyUrl,
 			new(MessagePackSerializer), websocket.BinaryMessage, tlscfg,
 		)
 	default:
@@ -32,10 +33,17 @@ func NewWebsocketPeer(serialization Serialization, url, origin string, tlscfg *t
 	}
 }
 
-func newWebsocketPeer(url, protocol, origin string, serializer Serializer, payloadType int, tlscfg *tls.Config) (Peer, error) {
+func newWebsocketPeer(url, protocol, origin, proxyUrl string, serializer Serializer, payloadType int, tlscfg *tls.Config) (Peer, error) {
 	dialer := websocket.Dialer{
 		Subprotocols:    []string{protocol},
 		TLSClientConfig: tlscfg,
+	}
+	if proxyUrl != "" {
+		parsedProxyUrl, err := url_.Parse(proxyUrl)
+		if err != nil {
+			return nil, err
+		}
+		dialer.Proxy = http.ProxyURL(parsedProxyUrl)
 	}
 	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
